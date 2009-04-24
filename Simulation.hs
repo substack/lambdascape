@@ -9,23 +9,24 @@ import Foreign
 import Data.Array.Storable
 import Data.List.Split (splitEvery)
 
-import Physics.ODE
+import Physics.ODE.Types
+import Physics.ODE.World as W
+import Physics.ODE.Mass as M
+import Physics.ODE.Body as B
 import Codec.Image.PNG
 
-title = "World"
+title = "LambdaScape"
 
 data Model = Model {
     terrain :: Terrain,
-    robots :: [Robot]
+    robots :: [Robot],
+    world :: World
 }
 
 data Terrain = Terrain {
-    tiles :: [Tile]
+    grid :: [[Vertex3 GLfloat]]
+    --triangles :: [GeomClass]
 }
-
-data Tile = Tile {
-    nw, ne, se, sw :: Vertex3 GLfloat
-} deriving Show
 
 data Robot = Robot {
     name :: String,
@@ -49,35 +50,34 @@ createModel = do
         takeEvery :: Int -> [a] -> [a]
         takeEvery i xs = map head $ splitEvery i xs
         
-        rowM ptr = (splitEvery w . map scaleHeight . takeEvery 3)
+        rowM ptr = (map scaleHeight . takeEvery 3)
             `liftM` peekArray (3 * w * h) ptr
+        
     pixels <- withStorableArray im rowM
     
     let
-        grid :: Int -> Int -> GLfloat
-        grid x y = (pixels !! ym) !! xm where
-            xm = x `mod` w
-            ym = y `mod` h
+        xx = cycle [ -(fromIntegral w) / 2 .. (fromIntegral w) / 2 ]
+        yy = concatMap (replicate w)
+            [ -(fromIntegral h) / 2 .. (fromIntegral h) / 2 ]
         
-        xx = [0 .. w - 1]
-        yy = [0 .. h - 1]
+        points :: [[Vertex3 GLfloat]]
+        points = splitEvery w $ zipWith3 Vertex3 xx yy pixels
         
-        tx :: Int -> GLfloat
-        tx x = (fromIntegral x) - (fromIntegral w) / 2
-        
-        ty :: Int -> GLfloat
-        ty y = (fromIntegral y) - (fromIntegral h) / 2
-        
-        makeTile :: Int -> Int -> Tile
-        makeTile x y = Tile nw ne se sw where
-            nw = Vertex3 (tx x) (ty y) $ grid x y
-            ne = Vertex3 (tx $ x + 1) (ty y) $ grid (x + 1) y
-            se = Vertex3 (tx $ x + 1) (ty $ y - 1) $ grid (x + 1) (y - 1)
-            sw = Vertex3 (tx x) (ty $ y - 1) $ grid x (y - 1)
-        tileGrid = [ [ makeTile x y | x <- xx ] | y <- yy ]
-        tiles = concat tileGrid
-        
-    return $ Model (Terrain tiles) []
+        --mesh :: [GeomClass]
+        --mesh = 
+    
+    -- setGeomData
+    world <- W.create
+    W.setGravity world 0 (-9.81) 0
+    
+    mass <- M.create
+    B.setMass mass 0.0
+    
+    return $ Model {
+        terrain = Terrain { grid = points },
+        robots = [],
+        world = world
+    }
 
 initialize :: IO ()
 initialize = do
@@ -101,23 +101,24 @@ display modelRef = do
     lighting $= Disabled
     
     model <- get modelRef
-    let
-        (Terrain tiles) = terrain model
-        texCoord2f :: GLfloat -> GLfloat -> IO ()
-        texCoord2f x y = texCoord $ TexCoord2 x y
-        quadM (Tile nw ne se sw) = do 
-            let
-                (Vertex3 _ _ zNW) = nw
-                (Vertex3 _ _ zNE) = ne
-                (Vertex3 _ _ zSE) = se
-                (Vertex3 _ _ zSW) = sw
-                z = (zNW + zNE + zSE + zSW) / 40
-            color $ Color4 z z z (1 :: GLfloat)
-            vertex nw
-            vertex ne
-            vertex se
-            vertex sw
-    renderPrimitive Quads $ mapM quadM tiles
+    
+    --renderGrid $ grid $ terrain model
     
     swapBuffers
     postRedisplay Nothing
+
+-- almost
+renderGrid :: [[Vertex3 GLfloat]] -> IO ()
+renderGrid grid = renderPrimitive TriangleStrip stripM where
+    stripM = zipWithM_ quadM highScan lowScan
+    
+    highScan = drop 1 $ concat $ map doubleUp grid
+    lowScan = drop 1 $ concat $ map doubleUp $ tail grid
+    doubleUp xs = [head xs] ++ xs ++ [last xs]
+    
+    quadM :: Vertex3 GLfloat -> Vertex3 GLfloat -> IO ()
+    quadM v1 v2 = pointM v1 >> pointM v2
+    
+    pointM :: Vertex3 GLfloat -> IO ()
+    pointM v@(Vertex3 _ _ z) = color (Color4 c c c 1) >> vertex v
+        where c = z / 10
