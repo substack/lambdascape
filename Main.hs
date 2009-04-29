@@ -16,7 +16,7 @@ main = do
     initWindow
     createWindow S.title
     initScene
-    modelRef <- newIORef =<< S.createModel
+    modelRef <- S.createModel
     navRef <- newIORef =<< N.createNavigator S.initialize
     
     -- return from the main loop so ghci stays running

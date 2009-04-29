@@ -1,72 +1,66 @@
--- Simulation.hs - physics goes here
+-- Simulation.hs - connect to and observe the physics simulation
 module Simulation where
 
 import Graphics.UI.GLUT
 import Data.IORef
 import Control.Monad
-
-import Foreign
-import Data.Array.Storable
-import Data.List.Split (splitEvery)
-
-import Physics.ODE
-import Physics.ODE.Types
-import Physics.ODE.World as W
-import Physics.ODE.Mass as M
-import Physics.ODE.Body as B
-
-import LambdaScape
+import Network
+import System.IO
+import Control.Concurrent (forkIO, yield)
+import System
 
 title = "LambdaScape"
 
 data Model = Model {
     terrain :: Terrain,
-    robots :: [Robot]
+    robots :: IORef [Robot],
+    sock :: Handle,
+    done :: Bool
 }
 
+type TriangleFace = (Vertex3 GLfloat, Vertex3 GLfloat, Vertex3 GLfloat)
+
 data Terrain = Terrain {
-    grid :: [[Vertex3 GLfloat]]
-    --triangles :: [GeomClass]
-}
+    triangles :: [TriangleFace]
+} deriving Show
 
 data Robot = Robot {
     name :: String,
-    geometry :: [GeomClass]
-}
+    position :: Vector3 GLfloat,
+    rotation :: GLmatrix GLfloat
+} deriving Show
 
-createModel :: IO Model
+createModel :: IO (IORef Model)
 createModel = do
-    grid <- loadTerrain "height.png"
+    args <- getArgs
+    let port = fromIntegral $ read $ head args
     
-    return $ Model {
-        terrain = Terrain grid,
-        robots = []
+    handle <- connectTo "localhost" (PortNumber port)
+    hSetBuffering handle LineBuffering
+    
+    hPutStrLn handle "observer\nterrain" -- request the terrain as an observer
+    -- terain is verticies
+    let
+        makeV3 :: (GLfloat, GLfloat, GLfloat) -> Vertex3 GLfloat
+        makeV3 (x,y,z) = Vertex3 x y z
+    verts <- (map makeV3 . read) `liftM` hGetLine handle
+    -- and faces (triangles) that index the vertices
+    faces <- read `liftM` hGetLine handle
+    let -- trace the indicies
+        tx :: [TriangleFace]
+        tx = map interp faces
+        interp (i,j,k) = (verts !! i, verts !! j, verts !! k)
+    
+    robotsRef <- newIORef []
+    
+    modelRef <- newIORef Model {
+        terrain = Terrain tx,
+        robots = robotsRef,
+        sock = handle,
+        done = False
     }
-
-createCar :: IO ()
-createCar = do
-    return ()
-
-{-
-    void applyAntiSwayBarForces() {
-        amt = 0;
-        for(int i = 0; i < 4; i++) {                
-            Vector3 anchor2 = wheels[i].Joint.Anchor2;
-            Vector3 anchor1 = wheels[i].Joint.Anchor;
-            Vector3 axis = wheels[i].Joint.Axis2;
-     
-            displacement = Vector3.Dot(anchor1-anchor2, axis);
-     
-            if(displacement > 0) {
-                amt = displacement * swayForce;
-                if(amt > swayForceLimit)
-                    amt = swayForceLimit;
-                wheels[i].Body.AddForce(-axis *amt); //downforce
-                wheels[i^1].Body.AddForce(axis *amt); //upforce
-            }
-        }
-    }           
--}
+    forkIO (updateRobots modelRef =<< lines `liftM` hGetContents handle)
+    return modelRef
 
 initialize :: IO ()
 initialize = do
@@ -76,7 +70,12 @@ keyboard :: IORef Model -> KeyboardMouseCallback
 keyboard modelRef key keyState modifiers _ = do
     -- escape key terminates the main loop correctly for debugging in ghci,
     -- unlike all of the orange book translations
-    when (key == Char '\27') leaveMainLoop
+    when (key == Char '\27') $ do
+        model <- get modelRef
+        let handle = sock model
+        modelRef $= model { done = True }
+        hPutStrLn handle "quit"
+        leaveMainLoop
 
 display :: IORef Model -> DisplayCallback
 display modelRef = do
@@ -90,21 +89,34 @@ display modelRef = do
     lighting $= Disabled
     
     model <- get modelRef
+    when (done model) $ leaveMainLoop
     
-    renderGrid $ grid $ terrain model
+    renderGrid $ terrain model
     renderObject Solid $ Sphere' 1.0 24 24 
     
     swapBuffers
     postRedisplay Nothing
 
--- almost
-renderGrid :: [[Vertex3 GLfloat]] -> IO ()
-renderGrid grid = renderPrimitive Quads stripM where
-    ptM vx = do
-        color $ Color4 1 0 0 (1 :: GLfloat)
-        mapM_ vertex vx
-    
-    quads :: [Vertex3 GLfloat] -> [Vertex3 GLfloat] -> [[Vertex3 GLfloat]]
-    quads row1 row2 =
-    
-    stripM = zipWithM_ rowM (init grid) (tail grid)
+updateRobots :: IORef Model -> [String] -> IO ()
+updateRobots modelRef [] = do
+    model <- get modelRef
+    modelRef $= model { done = True }
+
+updateRobots modelRef (line:xs) = do
+    (Model _ robotRef handle done) <- get modelRef
+    when (not done) $ do
+        putStrLn line
+        --(name, (pos, rot)) <- read `liftM` hGetLine handle 
+        {-
+        putStrLn $ "name=" ++ name
+        putStrLn $ "pos=" ++ pos
+        putStrLn $ "rot=" ++ rot
+        -}
+        yield >> updateRobots modelRef xs
+
+renderGrid :: Terrain -> IO ()
+renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
+    triM (v1,v2,v3) = ptM v1 >> ptM v2 >> ptM v3
+    ptM (Vertex3 x y z) = do
+        color $ Color4 z z z 1
+        vertex $ Vertex3 x y (z * 5)

@@ -31,21 +31,31 @@ class Physics :
         im = gd.image(file)
         width, height = im.size()
         
-        pairs = [ (x,y) for x in range(width) for y in range(height) ]
+        coords = [ # terrain spread from -5.0 to +5.0
+            (
+                x - width / 2,
+                y - height / 2,
+                im.red(im.getPixel((x,y))) / 255.0 # 0 to 1 from red channel
+            )
+            for x in range(width) for y in range(height)
+        ]
         grid = {}
         
         verts = []
-        for (x,y) in pairs :
-            rgb = im.getPixel((x,y))
-            z = im.red(rgb)
+        for (x,y,z) in coords :
             grid[(x,y)] = len(verts) # index into verts
             verts.append((x,y,z))
          
         faces = []
-        for p1 in pairs :
-            p2 = (x + 1) % 64, y % 64          # 1 - 2
-            p3 = x % 64, (y + 1) % 64          # | / |
-            p4 = (x + 1) % 64, (y + 1) % 64    # 3 - 4
+        for (x,y,z) in coords :
+            if x >= width / 2 - 1 or y >= height / 2 - 1 : continue
+            # 1 - 2
+            # | / |  <-- how triangles are built out of quads
+            # 3 - 4
+            p1 = (x, y)
+            p2 = (x + 1, y)
+            p3 = (x, y + 1)
+            p4 = (x + 1, y + 1)
             # triangles are groups of three indices
             faces.append((grid[p1], grid[p2], grid[p3]))
             faces.append((grid[p2], grid[p3], grid[p4]))
@@ -59,26 +69,27 @@ class Physics :
         ode.GeomTriMesh(mesh, self.space)
     
     def robot(self, name, x, y, z) :
-        box = ode.Body(world)
+        box = ode.Body(self.world)
         mass = ode.Mass()
         mass.setBox(1000, 1.0, 1.0, 1.0)
-        body.setMass(mass)
-        body.shape = "box"
-        body.boxsize = (1.0, 1.0, 1.0)
+        box.setMass(mass)
+        box.shape = "box"
+        box.boxsize = (1.0, 1.0, 1.0)
         
-        geom = ode.GeomBox(space, lengths=body.boxsize)
-        geom.setBody(body)
-        body.setPosition(0, 10, 0)
+        geom = ode.GeomBox(self.space, lengths=box.boxsize)
+        geom.setBody(box)
+        box.setPosition((0, 10, 0))
         
+        import math
         theta = 0
-        ct = cos (theta)
-        st = sin (theta)
-        body.setRotation([
+        ct = math.cos (theta)
+        st = math.sin (theta)
+        box.setRotation([
             ct, 0.0, -st,
             0.0, 1.0, 0.0,
             st, 0.0, ct
         ])
-        self.bodies[name] = body
+        self.bodies[name] = box
 
     # Collision callback
     def _near_callback(self, args, geom1, geom2) :
@@ -105,6 +116,7 @@ class Physics :
                     name = None # don't want to pop off for naming conflicts >_<
                     raise Exception("A robot by that name already exists")
                 self.robot(name, x, y, z)
+                self._handle_robot(sock, client, name)
             
         except :
             import traceback
@@ -130,10 +142,10 @@ class Physics :
                 # time to push an update to the observer
                 last = time.time()
                 # send all robot positions and rotations
-                for (name, body) in self.bodies :
+                for (name, body) in self.bodies.iteritems() :
                     pos = body.getPosition()
                     rot = body.getRotation()
-                    sock.sendall("%s:%s\n" % (name, str((pos, rot))))
+                    sock.sendall('("%s",(%s,%s))\n' % (name, pos, rot))
     
     def _handle_robot(self, sock, client, name) :
         body = self.bodies[name]
@@ -147,12 +159,14 @@ class Physics :
             cmd = line.split()[0]
             if cmd == "quit" : break
             elif cmd == "position" :
-                sock.sendall("%s\n", body.getPosition())
-            elif cmd == "rotation" :
-                sock.sendall("%s\n", body.getRotation())
+                pos = body.getPosition()
+                rot = body.getRotation()
+                sock.sendall('(%s,%s)\n' % (pos, rot))
             elif cmd == "distance" :
+                # TODO: compute the actual distance
                 sock.sendall("0.0\n")
             elif cmd == "motor" :
+                # TODO: motors
                 pass
             
     def listen(self) :
