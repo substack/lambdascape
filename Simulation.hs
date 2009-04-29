@@ -9,18 +9,19 @@ import Foreign
 import Data.Array.Storable
 import Data.List.Split (splitEvery)
 
+import Physics.ODE
 import Physics.ODE.Types
 import Physics.ODE.World as W
 import Physics.ODE.Mass as M
 import Physics.ODE.Body as B
-import Codec.Image.PNG
+
+import LambdaScape
 
 title = "LambdaScape"
 
 data Model = Model {
     terrain :: Terrain,
-    robots :: [Robot],
-    world :: World
+    robots :: [Robot]
 }
 
 data Terrain = Terrain {
@@ -35,53 +36,41 @@ data Robot = Robot {
 
 createModel :: IO Model
 createModel = do
-    epng <- loadPNGFile "height.png"
-    let
-        png = case epng of
-            (Left msg) -> error msg
-            (Right png') -> png'
-        im = imageData png
-        (w',h') = dimensions png
-        (w,h) = (fromIntegral w', fromIntegral h')
-        
-        scaleHeight :: Word8 -> GLfloat
-        scaleHeight z = (fromIntegral z) / 255 * 10
-        
-        takeEvery :: Int -> [a] -> [a]
-        takeEvery i xs = map head $ splitEvery i xs
-        
-        rowM ptr = (map scaleHeight . takeEvery 3)
-            `liftM` peekArray (3 * w * h) ptr
-        
-    pixels <- withStorableArray im rowM
-    
-    let
-        xx = cycle [ -(fromIntegral w) / 2 .. (fromIntegral w) / 2 ]
-        yy = concatMap (replicate w)
-            [ -(fromIntegral h) / 2 .. (fromIntegral h) / 2 ]
-        
-        points :: [[Vertex3 GLfloat]]
-        points = splitEvery w $ zipWith3 Vertex3 xx yy pixels
-        
-        --mesh :: [GeomClass]
-        --mesh = 
-    
-    -- setGeomData
-    world <- W.create
-    W.setGravity world 0 (-9.81) 0
-    
-    mass <- M.create
-    B.setMass mass 0.0
+    grid <- loadTerrain "height.png"
     
     return $ Model {
-        terrain = Terrain { grid = points },
-        robots = [],
-        world = world
+        terrain = Terrain grid,
+        robots = []
     }
+
+createCar :: IO ()
+createCar = do
+    return ()
+
+{-
+    void applyAntiSwayBarForces() {
+        amt = 0;
+        for(int i = 0; i < 4; i++) {                
+            Vector3 anchor2 = wheels[i].Joint.Anchor2;
+            Vector3 anchor1 = wheels[i].Joint.Anchor;
+            Vector3 axis = wheels[i].Joint.Axis2;
+     
+            displacement = Vector3.Dot(anchor1-anchor2, axis);
+     
+            if(displacement > 0) {
+                amt = displacement * swayForce;
+                if(amt > swayForceLimit)
+                    amt = swayForceLimit;
+                wheels[i].Body.AddForce(-axis *amt); //downforce
+                wheels[i^1].Body.AddForce(axis *amt); //upforce
+            }
+        }
+    }           
+-}
 
 initialize :: IO ()
 initialize = do
-    translate $ Vector3 0 0 ((-10) :: GLfloat)
+    translate $ Vector3 0 5 ((-10) :: GLfloat)
 
 keyboard :: IORef Model -> KeyboardMouseCallback
 keyboard modelRef key keyState modifiers _ = do
@@ -97,28 +86,25 @@ display modelRef = do
     blend $= Enabled
     blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
     shadeModel $= Flat
-    depthMask $= Enabled
+    depthMask $= Disabled
     lighting $= Disabled
     
     model <- get modelRef
     
-    --renderGrid $ grid $ terrain model
+    renderGrid $ grid $ terrain model
+    renderObject Solid $ Sphere' 1.0 24 24 
     
     swapBuffers
     postRedisplay Nothing
 
 -- almost
 renderGrid :: [[Vertex3 GLfloat]] -> IO ()
-renderGrid grid = renderPrimitive TriangleStrip stripM where
-    stripM = zipWithM_ quadM highScan lowScan
+renderGrid grid = renderPrimitive Quads stripM where
+    ptM vx = do
+        color $ Color4 1 0 0 (1 :: GLfloat)
+        mapM_ vertex vx
     
-    highScan = drop 1 $ concat $ map doubleUp grid
-    lowScan = drop 1 $ concat $ map doubleUp $ tail grid
-    doubleUp xs = [head xs] ++ xs ++ [last xs]
+    quads :: [Vertex3 GLfloat] -> [Vertex3 GLfloat] -> [[Vertex3 GLfloat]]
+    quads row1 row2 =
     
-    quadM :: Vertex3 GLfloat -> Vertex3 GLfloat -> IO ()
-    quadM v1 v2 = pointM v1 >> pointM v2
-    
-    pointM :: Vertex3 GLfloat -> IO ()
-    pointM v@(Vertex3 _ _ z) = color (Color4 c c c 1) >> vertex v
-        where c = z / 10
+    stripM = zipWithM_ rowM (init grid) (tail grid)

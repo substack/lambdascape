@@ -23,7 +23,7 @@ import Data.Array.Storable
 import Data.List.Split
 
 -- this will return a GeomStruct for TriangleMesh data, however that works
-loadTerrain :: String -> IO ()
+loadTerrain :: FilePath -> IO [[Vertex3 GLfloat]]
 loadTerrain file = do
     epng <- loadPNGFile file
     let
@@ -51,7 +51,8 @@ loadTerrain file = do
         
         points :: [[Vertex3 GLfloat]]
         points = splitEvery w $ zipWith3 Vertex3 xx yy pixels
-    return () -- for now
+    
+    return points
 
 -- for simulating LIDAR-type sensors
 -- use builtin Ray type to check for intersections and then solve
@@ -65,7 +66,7 @@ handler world handle = do
         =<< lines `liftM` hGetContents handle
 
 -- parse a command from the client, performing the appropriate response
--- and returning the 
+-- and returning the response data to send back to the client
 parseCommand :: World -> String -> IO String
 parseCommand world line = do
     let (cmd:params) = words line
