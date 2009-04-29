@@ -9,7 +9,8 @@ class Physics :
     def __init__(self) :
         # Create a world object
         self.world = ode.World()
-        self.world.setGravity( (0,-9.81,0) )
+        #self.world.setGravity( (0,-9.81,0) )
+        self.world.setGravity( (0,-0.1,0) )
         self.world.setERP(0.8)
         self.world.setCFM(1E-5)
          
@@ -66,7 +67,9 @@ class Physics :
         }
         mesh = ode.TriMeshData()
         mesh.build(verts, faces)
-        ode.GeomTriMesh(mesh, self.space)
+        geom = ode.GeomTriMesh(mesh, self.space)
+        geom.enable()
+        geom.setPosition((0.0,0.0,0.0))
     
     def robot(self, name, x, y, z) :
         box = ode.Body(self.world)
@@ -78,7 +81,7 @@ class Physics :
         
         geom = ode.GeomBox(self.space, lengths=box.boxsize)
         geom.setBody(box)
-        box.setPosition((0, 10, 0))
+        box.setPosition(tuple(float(i) for i in [x, y, z]))
         
         import math
         theta = 0
@@ -90,7 +93,7 @@ class Physics :
             st, 0.0, ct
         ])
         self.bodies[name] = box
-
+    
     # Collision callback
     def _near_callback(self, args, geom1, geom2) :
         contacts = ode.collide(geom1, geom2)
@@ -145,7 +148,7 @@ class Physics :
                 for (name, body) in self.bodies.iteritems() :
                     pos = body.getPosition()
                     rot = body.getRotation()
-                    sock.sendall('("%s",(%s,%s))\n' % (name, pos, rot))
+                    sock.sendall('("%s",%s,%s)\n' % (name, pos, list(rot)))
     
     def _handle_robot(self, sock, client, name) :
         body = self.bodies[name]
@@ -161,7 +164,7 @@ class Physics :
             elif cmd == "position" :
                 pos = body.getPosition()
                 rot = body.getRotation()
-                sock.sendall('(%s,%s)\n' % (pos, rot))
+                sock.sendall('(%s,%s)\n' % (pos, list(rot)))
             elif cmd == "distance" :
                 # TODO: compute the actual distance
                 sock.sendall("0.0\n")
@@ -203,7 +206,7 @@ class Physics :
     
     def step(self) :
         contactgroup = ode.JointGroup()
-        self.space.collide((self.world,contactgroup), self._near_callback)
+        self.space.collide((self.world, contactgroup), self._near_callback)
         
         self.world.step(self.dt)
         

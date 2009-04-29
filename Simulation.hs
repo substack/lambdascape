@@ -6,14 +6,16 @@ import Data.IORef
 import Control.Monad
 import Network
 import System.IO
-import Control.Concurrent (forkIO, yield)
+import Control.Concurrent (forkIO, yield, threadDelay)
 import System
+import qualified Data.Map as M
+import qualified Data.Map ((!))
 
 title = "LambdaScape"
 
 data Model = Model {
     terrain :: Terrain,
-    robots :: IORef [Robot],
+    robotsRef :: IORef (M.Map String Robot),
     sock :: Handle,
     done :: Bool
 }
@@ -25,9 +27,8 @@ data Terrain = Terrain {
 } deriving Show
 
 data Robot = Robot {
-    name :: String,
-    position :: Vector3 GLfloat,
-    rotation :: GLmatrix GLfloat
+    rRot :: GLmatrix GLfloat,
+    rPos :: Vector3 GLfloat
 } deriving Show
 
 createModel :: IO (IORef Model)
@@ -51,16 +52,38 @@ createModel = do
         tx = map interp faces
         interp (i,j,k) = (verts !! i, verts !! j, verts !! k)
     
-    robotsRef <- newIORef []
+    robotsRef <- newIORef $ M.empty
     
     modelRef <- newIORef Model {
         terrain = Terrain tx,
-        robots = robotsRef,
+        robotsRef = robotsRef,
         sock = handle,
         done = False
     }
-    forkIO (updateRobots modelRef =<< lines `liftM` hGetContents handle)
+    let updateM = updateRobots modelRef =<< lines `liftM` hGetContents handle
+    -- wait until the display callback has probably been run
+    forkIO (threadDelay 1000 >> updateM)
     return modelRef
+
+updateRobots :: IORef Model -> [String] -> IO ()
+updateRobots modelRef [] = do
+    model <- get modelRef
+    modelRef $= model { done = True }
+updateRobots modelRef (line:xs) = do
+    (Model _ robotsRef handle done) <- get modelRef
+    when (not done) $ do
+        let
+            px,py,pz :: GLfloat
+            rot :: [Float]
+            (name, (px,py,pz), rot) = read line
+        rotMat <- newMatrix RowMajor rot
+        
+        -- set the rotation and translation
+        robotsRef $~ M.insert name (Robot {
+            rPos = Vector3 px py pz,
+            rRot = rotMat
+        })
+        yield >> updateRobots modelRef xs
 
 initialize :: IO ()
 initialize = do
@@ -92,27 +115,11 @@ display modelRef = do
     when (done model) $ leaveMainLoop
     
     renderGrid $ terrain model
-    renderObject Solid $ Sphere' 1.0 24 24 
+    rr <- M.elems `liftM` (get $ robotsRef model)
+    mapM_ renderRobot =<< (M.elems `liftM` (get $ robotsRef model))
     
     swapBuffers
     postRedisplay Nothing
-
-updateRobots :: IORef Model -> [String] -> IO ()
-updateRobots modelRef [] = do
-    model <- get modelRef
-    modelRef $= model { done = True }
-
-updateRobots modelRef (line:xs) = do
-    (Model _ robotRef handle done) <- get modelRef
-    when (not done) $ do
-        putStrLn line
-        --(name, (pos, rot)) <- read `liftM` hGetLine handle 
-        {-
-        putStrLn $ "name=" ++ name
-        putStrLn $ "pos=" ++ pos
-        putStrLn $ "rot=" ++ rot
-        -}
-        yield >> updateRobots modelRef xs
 
 renderGrid :: Terrain -> IO ()
 renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
@@ -120,3 +127,10 @@ renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
     ptM (Vertex3 x y z) = do
         color $ Color4 z z z 1
         vertex $ Vertex3 x y (z * 5)
+
+renderRobot :: Robot -> IO ()
+renderRobot robot = preservingMatrix $ do
+    matrixMode $= Modelview 0
+    translate $ rPos robot
+    color $ Color4 1 0 0 (1 :: GLfloat)
+    renderObject Solid $ Cube 1.0
