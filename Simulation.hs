@@ -28,7 +28,7 @@ data Terrain = Terrain {
 
 data Robot = Robot {
     rRot :: GLmatrix GLfloat,
-    rPos :: Vertex3 GLfloat
+    rPos :: Vector3 GLfloat
 } deriving Show
 
 createModel :: IO (IORef Model)
@@ -80,7 +80,7 @@ updateRobots modelRef (line:xs) = do
         
         -- set the rotation and translation
         robotsRef $~ M.insert name (Robot {
-            rPos = Vertex3 px py pz,
+            rPos = Vector3 px py pz,
             rRot = rotMat
         })
         yield >> updateRobots modelRef xs
@@ -111,6 +111,7 @@ display modelRef = do
     shadeModel $= Flat
     depthMask $= Enabled
     depthFunc $= Just Lequal
+    
     lighting $= Disabled
     
     model <- get modelRef
@@ -127,13 +128,15 @@ renderGrid :: Terrain -> IO ()
 renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
     triM (v1,v2,v3) = ptM v1 >> ptM v2 >> ptM v3
     ptM (Vertex3 x y z) = do
-        color $ Color4 z z z 1
+        let c = z / 4.0
+        color $ Color4 c c c 1
         vertex $ Vertex3 x y (z * 5)
 
 renderRobot :: Robot -> IO ()
 renderRobot robot = preservingMatrix $ do
-    --translate $ rPos robot
     color $ Color4 1 0 0 (1 :: GLfloat)
-    pointSize $= 20
-    renderPrimitive Points $ vertex $ rPos robot
-    --renderObject Solid $ Cube 1.0
+    --pointSize $= 20
+    --renderPrimitive Points $ vertex $ rPos robot
+    --multMatrix $ rRot robot
+    translate $ rPos robot
+    renderObject Solid $ Cube 10.0

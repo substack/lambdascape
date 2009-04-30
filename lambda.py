@@ -9,7 +9,7 @@ class Physics :
     def __init__(self) :
         # Create a world object
         self.world = ode.World()
-        self.world.setGravity((0,0,-0.00005))
+        self.world.setGravity((0,0,-0.001))
         self.world.setERP(0.0)
         self.world.setCFM(0.0)
          
@@ -24,19 +24,20 @@ class Physics :
         self.last_update = time.time()
         self.done = False
         self.terrain = None
+        self.terrain_geom = None
     
     def load_terrain(self, file) :
         # build terrain triangles from an image
         import gd
         im = gd.image(file)
         width, height = im.size()
-        hx, hy = 1, 1 
+        sx, sy, sz = 2, 2, 4
         
         coords = [ # terrain spread from -5.0 to +5.0
             (
-                (x - width / 2) * hx,
-                (y - height / 2) * hy,
-                im.red(im.getPixel((x,y))) / 255.0 # 0 to 1 from red channel
+                (x - width / 2) * sx,
+                (y - height / 2) * sy,
+                im.red(im.getPixel((x,y))) / 255.0 * sz
             )
             for x in range(width) for y in range(height)
         ]
@@ -49,15 +50,15 @@ class Physics :
          
         faces = []
         for (x,y,z) in coords :
-            if x >= hx * (width / 2 - 1) or y >= hy * (height / 2 - 1) :
+            if x >= sx * (width / 2 - 1) or y >= sy * (height / 2 - 1) :
                 continue
             # 1 - 2
             # | / |  <-- how triangles are built out of quads
             # 3 - 4
             p1 = (x, y)
-            p2 = (x + hx, y)
-            p3 = (x, y + hy)
-            p4 = (x + hx, y + hy)
+            p2 = (x + sx, y)
+            p3 = (x, y + sy)
+            p4 = (x + sx, y + sy)
             # triangles are groups of three indices
             faces.append((grid[p1], grid[p2], grid[p3]))
             faces.append((grid[p2], grid[p3], grid[p4]))
@@ -68,8 +69,8 @@ class Physics :
         }
         mesh = ode.TriMeshData()
         mesh.build(verts, faces)
-        geom = ode.GeomTriMesh(mesh, self.space)
-        geom.setPosition((0.0,0.0,0.0))
+        self.terrain_geom = ode.GeomTriMesh(mesh, self.space)
+        self.terrain_geom.setPosition((0.0,0.0,0.0))
     
     def robot(self, name, x, y, z) :
         box = ode.Body(self.world)
@@ -77,7 +78,7 @@ class Physics :
         mass.setBox(1000, 1.0, 1.0, 1.0)
         box.setMass(mass)
         box.shape = "box"
-        box.boxsize = (1.0, 1.0, 1.0)
+        box.boxsize = (10.0, 10.0, 10.0)
         
         geom = ode.GeomBox(self.space, lengths=box.boxsize)
         geom.setBody(box)
@@ -93,7 +94,33 @@ class Physics :
             st, 0.0, ct
         ])
         self.bodies[name] = box
-    
+        
+    def lidar(self, name, vx, vy, vz) :
+        """
+            With a LIDAR-type instrument, query the distance to a solid object
+            in a direction
+        """
+        body = self.bodies[name]
+        # create a ray facing the specified direction
+        ray = ode.GeomRay(self.space, rlen=100.0)
+        ray.set(body.getPosition(), (vx, vy, vz))
+        
+        contacts = ode.collide(self.terrain_geom, ray)
+        for geom in self.bodies.itervalues() :
+            if geom != body :
+                contacts.extend( ode.collide(geom, ray) )
+        
+        if contacts == [] : return -1.0 # no collisions
+        distances = []
+        px, py, pz = body.getPosition()
+        for contact in contacts :
+            pos, normal, depth, geom1, geom2 = contact.getContactGeomParams()
+            x, y, z = pos
+            distances.append((
+                (x - px) ** 2 + (y - py) ** 2 + (z - pz) ** 2
+            ))
+        return min(distances) # returns closest collision
+        
     # Collision callback
     def _near_callback(self, args, geom1, geom2) :
         contacts = ode.collide(geom1, geom2)
@@ -161,6 +188,7 @@ class Physics :
             elif line == "" : break
             
             cmd = line.split()[0]
+            args = line.split()[1:]
             if cmd == "quit" : break
             elif cmd == "shutdown" :
                 self.done = True
@@ -169,12 +197,14 @@ class Physics :
                 pos = body.getPosition()
                 rot = body.getRotation()
                 sock.sendall('(%s,%s)\n' % (pos, list(rot)))
-            elif cmd == "distance" :
-                # TODO: compute the actual distance
-                sock.sendall("0.0\n")
-            elif cmd == "motor" :
-                # TODO: motors
-                pass
+            elif cmd == "lidar" :
+                x, y, z = map(float, args)
+                sock.sendall("%f\n" % self.lidar(name, x, y, z))
+            elif cmd == "force" :
+                # no wheels for now, rocket power
+                self.bodies[name].addRelForce(tuple(
+                    float(x) for x in args
+                ))
             
     def listen(self) :
         print "Spawning service on port %s" % self.port
