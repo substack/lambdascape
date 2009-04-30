@@ -9,17 +9,16 @@ class Physics :
     def __init__(self) :
         # Create a world object
         self.world = ode.World()
-        #self.world.setGravity( (0,-9.81,0) )
-        self.world.setGravity( (0,-0.1,0) )
-        self.world.setERP(0.8)
-        self.world.setCFM(1E-5)
+        self.world.setGravity((0,0,-0.00005))
+        self.world.setERP(0.0)
+        self.world.setCFM(0.0)
          
         self.space = ode.Space()
         self.bodies = {}
         
-        self.floor = ode.GeomPlane(self.space, (0,1,0), 0)
+        #self.floor = ode.GeomPlane(self.space, (0,1,0), -5)
         
-        self.fps = 25.0
+        self.fps = 100.0
         self.dt = 1.0 / self.fps
         
         self.last_update = time.time()
@@ -31,11 +30,12 @@ class Physics :
         import gd
         im = gd.image(file)
         width, height = im.size()
+        hx, hy = 1, 1 
         
         coords = [ # terrain spread from -5.0 to +5.0
             (
-                x - width / 2,
-                y - height / 2,
+                (x - width / 2) * hx,
+                (y - height / 2) * hy,
                 im.red(im.getPixel((x,y))) / 255.0 # 0 to 1 from red channel
             )
             for x in range(width) for y in range(height)
@@ -49,14 +49,15 @@ class Physics :
          
         faces = []
         for (x,y,z) in coords :
-            if x >= width / 2 - 1 or y >= height / 2 - 1 : continue
+            if x >= hx * (width / 2 - 1) or y >= hy * (height / 2 - 1) :
+                continue
             # 1 - 2
             # | / |  <-- how triangles are built out of quads
             # 3 - 4
             p1 = (x, y)
-            p2 = (x + 1, y)
-            p3 = (x, y + 1)
-            p4 = (x + 1, y + 1)
+            p2 = (x + hx, y)
+            p3 = (x, y + hy)
+            p4 = (x + hx, y + hy)
             # triangles are groups of three indices
             faces.append((grid[p1], grid[p2], grid[p3]))
             faces.append((grid[p2], grid[p3], grid[p4]))
@@ -68,7 +69,6 @@ class Physics :
         mesh = ode.TriMeshData()
         mesh.build(verts, faces)
         geom = ode.GeomTriMesh(mesh, self.space)
-        geom.enable()
         geom.setPosition((0.0,0.0,0.0))
     
     def robot(self, name, x, y, z) :
@@ -101,7 +101,7 @@ class Physics :
         world,contactgroup = args
         for c in contacts:
             c.setBounce(0.2)
-            c.setMu(5000)
+            c.setMu(50.0)
             j = ode.ContactJoint(world, contactgroup, c)
             j.attach(geom1.getBody(), geom2.getBody())
     
@@ -133,9 +133,10 @@ class Physics :
         while not self.done :
             line = self.getline(sock)
             if not line is None :
-                if line == "" : break
-                if line.strip() == "quit" : break
-                if line.strip() == "shutdown" :
+                cmd = line.strip()
+                if cmd == "" : break
+                elif cmd == "quit" : break
+                elif cmd == "shutdown" :
                     self.done = True
                     break
                 if line.strip() == "terrain" :
@@ -161,6 +162,9 @@ class Physics :
             
             cmd = line.split()[0]
             if cmd == "quit" : break
+            elif cmd == "shutdown" :
+                self.done = True
+                break
             elif cmd == "position" :
                 pos = body.getPosition()
                 rot = body.getRotation()
@@ -177,15 +181,18 @@ class Physics :
         
         import socket
         server = socket.socket()
-        server.bind(("localhost", int(opts["port"])))
-        server.listen(5)
         try :
+            server.bind(("localhost", int(self.port)))
+            server.listen(5)
             while not self.done :
                 sock, client = server.accept() # we get signal
                 sock.setblocking(1) # blocking socket
                 threading.Thread(
                     None, self._handle_client, "handler", [ sock, client ]
                 ).start()
+        except : # probably address is already in use
+            self.port += 1 # next port
+            self.listen()
         finally :
             self.done = True
             server.close()

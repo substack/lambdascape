@@ -28,7 +28,7 @@ data Terrain = Terrain {
 
 data Robot = Robot {
     rRot :: GLmatrix GLfloat,
-    rPos :: Vector3 GLfloat
+    rPos :: Vertex3 GLfloat
 } deriving Show
 
 createModel :: IO (IORef Model)
@@ -80,14 +80,15 @@ updateRobots modelRef (line:xs) = do
         
         -- set the rotation and translation
         robotsRef $~ M.insert name (Robot {
-            rPos = Vector3 px py pz,
+            rPos = Vertex3 px py pz,
             rRot = rotMat
         })
         yield >> updateRobots modelRef xs
 
 initialize :: IO ()
 initialize = do
-    translate $ Vector3 0 5 ((-10) :: GLfloat)
+    --rotate 180 $ Vector3 1 0 (0 :: GLfloat)
+    translate $ Vector3 0 0 (-100 :: GLfloat)
 
 keyboard :: IORef Model -> KeyboardMouseCallback
 keyboard modelRef key keyState modifiers _ = do
@@ -108,7 +109,8 @@ display modelRef = do
     blend $= Enabled
     blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
     shadeModel $= Flat
-    depthMask $= Disabled
+    depthMask $= Enabled
+    depthFunc $= Just Lequal
     lighting $= Disabled
     
     model <- get modelRef
@@ -130,7 +132,8 @@ renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
 
 renderRobot :: Robot -> IO ()
 renderRobot robot = preservingMatrix $ do
-    matrixMode $= Modelview 0
-    translate $ rPos robot
+    --translate $ rPos robot
     color $ Color4 1 0 0 (1 :: GLfloat)
-    renderObject Solid $ Cube 1.0
+    pointSize $= 20
+    renderPrimitive Points $ vertex $ rPos robot
+    --renderObject Solid $ Cube 1.0
