@@ -1,0 +1,13 @@
+                      LambdaScape Key Bindings
+General Keys
+    F1      show this message
+Navigation Keys (vi-inspired, highly intuitive!)
+    h         move left             w          look up
+    j         move backward         a          look left
+    k         move forward          s          look down
+    l         move right            d          look right
+    u         move up               q          tilt counter-clockwise
+    i         move down             e          tilt clockwise
+    
+    up key    move forward          down key   move backward
+    left key  look left             right key  look right

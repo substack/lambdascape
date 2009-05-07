@@ -10,7 +10,6 @@ import Control.Concurrent (forkIO, yield, threadDelay)
 import System
 import qualified Data.Map as M
 import qualified Data.Map ((!))
-import Data.List.Split (splitEvery)
 
 import Prelude hiding (catch)
 import Control.Exception (catch)
@@ -78,14 +77,14 @@ updateRobots modelRef [] = do
 updateRobots modelRef (line:xs) = do
     (Model _ robotsRef handle done) <- get modelRef
     when (not done) $ do
-        -- grab the name and column-major rotation matrix
+        -- grab the robot name and its row-major 4x4 matrix
         let parsed = reads line :: [((String, [Float]),String)]
         case parsed of
-            [] -> do -- complain loudly about bad input
+            [] -> do -- complain loudly about bad input without crashing
                 putStrLn $ "Failed to parse\n"
                     ++ (concatMap ("    " ++) $ lines line)
             [((name, mat),_)] -> do -- set the rotation and translation
-                rMat <- newMatrix ColumnMajor mat
+                rMat <- newMatrix RowMajor mat
                 robotsRef $~ M.insert name (Robot {
                     rMatrix = rMat
                 })
@@ -93,7 +92,6 @@ updateRobots modelRef (line:xs) = do
 
 initialize :: IO ()
 initialize = do
-    --rotate 180 $ Vector3 1 0 (0 :: GLfloat)
     translate $ Vector3 0 0 (-100 :: GLfloat)
 
 keyboard :: IORef Model -> KeyboardMouseCallback
@@ -106,6 +104,10 @@ keyboard modelRef key keyState modifiers _ = do
         modelRef $= model { done = True }
         hPutStrLn handle "quit"
         leaveMainLoop
+    when (keyState == Up) $ case key of
+        -- show the keybindings file
+        SpecialKey KeyF1 -> putStr =<< readFile "KEYBINDINGS"
+        _ -> return ()
 
 -- main display monad
 -- does some opengl housekeeping and then delegates to the render monads

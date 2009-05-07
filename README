@@ -1,0 +1,87 @@
+ λλ
+ λλλλ                                 βββ               δδδ
+   λλλ                                 ββ               δδ 
+     λλ         ααααα    μμ            ββ ββββ     δδδδ δδ   ααααα  
+      λλ       αα   αα   μμμμμ  μμμμ   ββββ  ββ   δδ  δδδδ  αα   αα 
+       λλ           αα   μμμ μμμμ μμμ  ββ     ββ δδ     δδ       αα 
+        λλ      αααααα   μμ   μμ   μμ  ββ     ββ δδ     δδ   αααααα 
+        λλλ    αα   αα   μμ   μμ   μμ  ββ     ββ δδ     δδ  αα   αα 
+       λλ λλ   αα   αα   μμ   μμ   μμ  ββ    ββ   δδ    δδ  αα   αα 
+      λλ   λλ   αααα αα  μμ   μμ   μμ ββ ββββ       δδδδ δδ  αααα αα
+     λλ     λλ        _____    ___            ____   ____
+    λλ       λλ      /        /   \    /\    |    \ |
+   λλ         λλλ    \_____  /        /__\   |____/ |___
+  λλλ          λλλλ        \ \       /    \  |      |
+ λλ              λλλ  _____/  \___/ /      \ |      |____
+
+                               LambdaScape, or:
+         How I learned to stop worrying and love affine transformations
+
+"We're Lambda Lambda Lambda and Omega Mu. We come here on stage tonight to do
+our show for you."
+    -- Alonzo Church on the Lambda Calculus
+
+"Z-up dawg, I herd you like coordinate systems"
+    -- Xzibit on Coordinate Systems
+
+Table of Contents:
+    0x00: Overview
+    0x01: Dependencies
+    0x02: Building from Source
+    0x03: Running All the Pieces
+    0x04: Robots Running Amok
+    0xff: License
+
+0x00: Overview
+    LambdaScape is a collection of programs that provides a framework for
+    writing and testing autonomous robots in a simulated physical world.
+    The server, lambda.py, accepts connections from observers such as
+    lambdascape and robots.
+    
+    Observers request the terrain from the server and receive robot position
+    matrix updates.
+    
+    Robots can cast a ray in a direction and get back the distance to the
+    closest solid surface, much like a LIDAR sensor. Robots are rocket-powered
+    because it's so much easier than using wheels.
+
+0x01: Dependencies
+    LambdaScape is quite needy and demands that you provide it with libraries.
+    
+    sudo apt-get install python-2.5 python-pyode ghc6 libghc6-glut-dev \
+        libghc6-network-dev libghc6-parallel-dev libghc6-time-dev
+    
+    If you don't have apt-get, get it. The haskell libraries may be skipped if
+    you obtain a pre-built distribution.
+
+0x02: Building from Source
+    make clean && make
+
+0x03: Running All the Pieces
+    ./lambda.py --port=9001 & \
+        ./lambdascape 9001 & \
+        nc localhost 9001
+    
+    For navigation keybindings, press F1 within lambdascape.
+    See the next section for what to type at the prompt.
+
+0x04: Robots Running Amok
+    Robots connect to the server and identify with their name and position. The
+    coordinate system of the world is z-up. Example:
+        killbot 0 0 50
+    
+    Robots can fire their thrusters in any direction with any amount of force.
+    Example:
+        force 1000 0 30000
+    
+    Robots can cast a ray and query the distance to the closest surface. The ray
+    is specified as a vector relative to the robot's current position which need
+    not be normalized.
+    Example:
+        lidar 1 3 0
+    
+    Both robots and observers can "quit" and "shutdown" the service by stating
+    as such.
+
+0xff: This project is free software distributed under a BSD license.
+      See the LICENSE file included in this distribution for more information.
