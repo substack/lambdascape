@@ -10,6 +10,10 @@ import Control.Concurrent (forkIO, yield, threadDelay)
 import System
 import qualified Data.Map as M
 import qualified Data.Map ((!))
+import Data.List.Split (splitEvery)
+
+import Prelude hiding (catch)
+import Control.Exception (catch)
 
 title = "LambdaScape"
 
@@ -27,8 +31,7 @@ data Terrain = Terrain {
 } deriving Show
 
 data Robot = Robot {
-    rRot :: GLmatrix GLfloat,
-    rPos :: Vector3 GLfloat
+    rMatrix :: GLmatrix GLfloat
 } deriving Show
 
 createModel :: IO (IORef Model)
@@ -75,18 +78,18 @@ updateRobots modelRef [] = do
 updateRobots modelRef (line:xs) = do
     (Model _ robotsRef handle done) <- get modelRef
     when (not done) $ do
-        let
-            px,py,pz :: GLfloat
-            rot :: [Float]
-            (name, (px,py,pz), rot) = read line
-        rotMat <- newMatrix RowMajor rot
-        
-        -- set the rotation and translation
-        robotsRef $~ M.insert name (Robot {
-            rPos = Vector3 px py pz,
-            rRot = rotMat
-        })
-        yield >> updateRobots modelRef xs
+        -- grab the name and column-major rotation matrix
+        let parsed = reads line :: [((String, [Float]),String)]
+        case parsed of
+            [] -> do -- complain loudly about bad input
+                putStrLn $ "Failed to parse\n"
+                    ++ (concatMap ("    " ++) $ lines line)
+            [((name, mat),_)] -> do -- set the rotation and translation
+                rMat <- newMatrix ColumnMajor mat
+                robotsRef $~ M.insert name (Robot {
+                    rMatrix = rMat
+                })
+        yield >> updateRobots modelRef xs -- next line
 
 initialize :: IO ()
 initialize = do
@@ -141,8 +144,5 @@ renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
 renderRobot :: Robot -> IO ()
 renderRobot robot = preservingMatrix $ do
     color $ Color4 1 0 0 (1 :: GLfloat)
-    --pointSize $= 20
-    --renderPrimitive Points $ vertex $ rPos robot
-    translate $ rPos robot
-    --multMatrix $ rRot robot
+    multMatrix $ rMatrix robot
     renderObject Solid $ Cube 10.0

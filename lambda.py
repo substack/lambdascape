@@ -176,9 +176,16 @@ class Physics :
                 last = time.time()
                 # send all robot positions and rotations
                 for (name, body) in self.bodies.iteritems() :
-                    pos = body.getPosition()
-                    rot = body.getRotation()
-                    sock.sendall('("%s",%s,%s)\n' % (name, pos, list(rot)))
+                    rot = list(body.getRotation()) # 9-tuple as 3x3 matrix
+                    x,y,z = body.getPosition()
+                    # set the translation and convert to 4x4
+                    mat = (
+                        rot[0:9:3] + [0.0] +
+                        rot[1:9:3] + [0.0] +
+                        rot[2:9:3] + [0.0] +
+                        [x, y, z, 1.0]
+                    )
+                    sock.sendall('("%s",%s)\n' % (name, mat))
     
     def _handle_robot(self, sock, client, name) :
         body = self.bodies[name]
