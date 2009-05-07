@@ -10,6 +10,7 @@ import Control.Concurrent (forkIO, yield, threadDelay)
 import System
 import qualified Data.Map as M
 import qualified Data.Map ((!))
+import List (maximum, minimum)
 
 import Prelude hiding (catch)
 import Control.Exception (catch)
@@ -26,7 +27,8 @@ data Model = Model {
 type TriangleFace = (Vertex3 GLfloat, Vertex3 GLfloat, Vertex3 GLfloat)
 
 data Terrain = Terrain {
-    triangles :: [TriangleFace]
+    triangles :: [TriangleFace],
+    zrange :: (GLfloat, GLfloat)
 } deriving Show
 
 data Robot = Robot {
@@ -56,11 +58,14 @@ createModel = do
         tx :: [TriangleFace]
         tx = map interp faces
         interp (i,j,k) = (verts !! i, verts !! j, verts !! k)
+        depths = map (\(Vertex3 _ _ z) -> z) verts
+        zmin = minimum depths
+        zmax = maximum depths
     
     robotsRef <- newIORef $ M.empty
     
     modelRef <- newIORef Model {
-        terrain = Terrain tx,
+        terrain = Terrain tx (zmin,zmax),
         robotsRef = robotsRef,
         sock = handle,
         done = False
@@ -136,10 +141,10 @@ display modelRef = do
     postRedisplay Nothing
 
 renderGrid :: Terrain -> IO ()
-renderGrid (Terrain trx) = renderPrimitive Triangles $ mapM_ triM trx where
+renderGrid (Terrain trx zr) = renderPrimitive Triangles $ mapM_ triM trx where
     triM (v1,v2,v3) = ptM v1 >> ptM v2 >> ptM v3
     ptM (Vertex3 x y z) = do
-        let c = z / 4.0
+        let c = (z - fst zr) / (snd zr - fst zr)
         color $ Color4 c c c 1
         vertex $ Vertex3 x y (z * 5)
 

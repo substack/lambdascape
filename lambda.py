@@ -1,6 +1,4 @@
 #!/usr/bin/python2.5
-# based on http://opende.sourceforge.net/wiki/index.php/HOWTO_4_wheel_vehicle
-# and http://pyode.sourceforge.net/tutorials/tutorial3.html
 
 import ode
 import threading, time, re
@@ -9,15 +7,15 @@ class Physics :
     def __init__(self) :
         # Create a world object
         self.world = ode.World()
-        self.world.setGravity((0,0,-1.0))
-        # these parameters greatly affect the stability limits
-        self.world.setERP(2.0)
-        self.world.setCFM(0.1)
+        self.world.setGravity((0,0,-3.0))
+        
+        self.world.setERP(0.1) # error correction each time step
+        self.world.setCFM(0.0) # rigid bodies
          
         self.space = ode.Space()
         self.bodies = {}
         
-        self.fps = 25.0
+        self.fps = 50.0
         self.dt = 1.0 / self.fps
         
         self.last_update = time.time()
@@ -30,7 +28,8 @@ class Physics :
         import gd
         im = gd.image(file)
         width, height = im.size()
-        sx, sy, sz = 2, 2, 4
+        # scale the terrain
+        sx, sy, sz = 4, 4, 4
         
         coords = [ # terrain spread from -5.0 to +5.0
             (
@@ -130,7 +129,7 @@ class Physics :
         world,contactgroup = args
         for c in contacts:
             c.setBounce(0.02)
-            c.setMu(100.0)
+            c.setMu(1000.0)
             j = ode.ContactJoint(world, contactgroup, c)
             j.attach(geom1.getBody(), geom2.getBody())
     
@@ -178,12 +177,12 @@ class Physics :
                 for (name, body) in self.bodies.iteritems() :
                     rot = list(body.getRotation()) # 9-tuple as 3x3 matrix
                     x,y,z = body.getPosition()
-                    # set the translation and convert to 4x4
+                    # set the translation and convert to a row-major 4x4
                     mat = (
-                        rot[0:9:3] + [0.0] +
-                        rot[1:9:3] + [0.0] +
-                        rot[2:9:3] + [0.0] +
-                        [x, y, z, 1.0]
+                        rot[0:3] + [x] +
+                        rot[3:6] + [y] +
+                        rot[6:9] + [z] +
+                        [0.0, 0.0, 0.0, 1.0]
                     )
                     sock.sendall('("%s",%s)\n' % (name, mat))
     
@@ -263,8 +262,7 @@ class Physics :
         
         self.last_update = time.time()
         elapsed = time.time() - elapsed
-        if elapsed < self.dt :
-            # don't go faster than physics-time
+        if elapsed < self.dt : # simulation is too fast
             time.sleep(self.dt - elapsed)
 
     def getline(self, sock, t=0.01) :

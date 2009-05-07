@@ -68,7 +68,7 @@ Table of Contents:
 0x04: Robots Running Amok
     Robots connect to the server and identify with their name and position. The
     coordinate system of the world is z-up. Example:
-        killbot 0 0 50
+        killbot 0 0 15
     
     Robots can fire their thrusters in any direction with any amount of force.
     Example:
@@ -82,6 +82,6 @@ Table of Contents:
     
     Both robots and observers can "quit" and "shutdown" the service by stating
     as such.
-
+    
 0xff: This project is free software distributed under a BSD license.
       See the LICENSE file included in this distribution for more information.
