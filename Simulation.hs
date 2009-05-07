@@ -33,7 +33,10 @@ data Robot = Robot {
 
 createModel :: IO (IORef Model)
 createModel = do
+    prog <- getProgName
     args <- getArgs
+    when (length args < 1) $ do
+        putStrLn $ error $ "\n\tUsage: " ++ prog ++ " [port]"
     let port = fromIntegral $ read $ head args
     
     handle <- connectTo "localhost" (PortNumber port)
@@ -101,6 +104,8 @@ keyboard modelRef key keyState modifiers _ = do
         hPutStrLn handle "quit"
         leaveMainLoop
 
+-- main display monad
+-- does some opengl housekeeping and then delegates to the render monads
 display :: IORef Model -> DisplayCallback
 display modelRef = do
     clearColor $= Color4 0.8 0.65 0.6 1
@@ -117,8 +122,9 @@ display modelRef = do
     model <- get modelRef
     when (done model) $ leaveMainLoop
     
+    -- draw the terrain
     renderGrid $ terrain model
-    rr <- M.elems `liftM` (get $ robotsRef model)
+    -- render all the robots in the robot mapping
     mapM_ renderRobot =<< (M.elems `liftM` (get $ robotsRef model))
     
     swapBuffers
@@ -137,6 +143,6 @@ renderRobot robot = preservingMatrix $ do
     color $ Color4 1 0 0 (1 :: GLfloat)
     --pointSize $= 20
     --renderPrimitive Points $ vertex $ rPos robot
-    --multMatrix $ rRot robot
     translate $ rPos robot
+    --multMatrix $ rRot robot
     renderObject Solid $ Cube 10.0

@@ -9,16 +9,15 @@ class Physics :
     def __init__(self) :
         # Create a world object
         self.world = ode.World()
-        self.world.setGravity((0,0,-0.001))
-        self.world.setERP(0.0)
-        self.world.setCFM(0.0)
+        self.world.setGravity((0,0,-1.0))
+        # these parameters greatly affect the stability limits
+        self.world.setERP(2.0)
+        self.world.setCFM(0.1)
          
         self.space = ode.Space()
         self.bodies = {}
         
-        #self.floor = ode.GeomPlane(self.space, (0,1,0), -5)
-        
-        self.fps = 100.0
+        self.fps = 25.0
         self.dt = 1.0 / self.fps
         
         self.last_update = time.time()
@@ -27,7 +26,7 @@ class Physics :
         self.terrain_geom = None
     
     def load_terrain(self, file) :
-        # build terrain triangles from an image
+        "build terrain triangles from an image that gd can read"
         import gd
         im = gd.image(file)
         width, height = im.size()
@@ -73,6 +72,9 @@ class Physics :
         self.terrain_geom.setPosition((0.0,0.0,0.0))
     
     def robot(self, name, x, y, z) :
+        """
+            Create a new robot with a name positioned at (x,y,z)
+        """
         box = ode.Body(self.world)
         mass = ode.Mass()
         mass.setBox(1000, 1.0, 1.0, 1.0)
@@ -127,8 +129,8 @@ class Physics :
         # Create contact joints
         world,contactgroup = args
         for c in contacts:
-            c.setBounce(0.2)
-            c.setMu(50.0)
+            c.setBounce(0.02)
+            c.setMu(100.0)
             j = ode.ContactJoint(world, contactgroup, c)
             j.attach(geom1.getBody(), geom2.getBody())
     
@@ -242,6 +244,8 @@ class Physics :
             sys.exit(0)
     
     def step(self) :
+        elapsed = time.time()
+        
         contactgroup = ode.JointGroup()
         self.space.collide((self.world, contactgroup), self._near_callback)
         
@@ -251,6 +255,10 @@ class Physics :
         contactgroup.empty()
         
         self.last_update = time.time()
+        elapsed = time.time() - elapsed
+        if elapsed < self.dt :
+            # don't go faster than physics-time
+            time.sleep(self.dt - elapsed)
 
     def getline(self, sock, t=0.01) :
         import select
@@ -270,7 +278,7 @@ if __name__ == "__main__" :
     
     import getopt, sys
     optlist, cmd = getopt.getopt(
-        sys.argv[1:], "", "port= map=".split(),
+        sys.argv[1:], "", "port= map= fps= ".split(),
     )
     opts = dict(
         (re.sub(r"^--", "", k),v)
@@ -284,5 +292,10 @@ if __name__ == "__main__" :
     if not "map" in opts :
         opts["map"] = "map.png"
     physics.load_terrain(opts["map"])
+    
+    if not "fps" in opts :
+        opts["fps"] = 25.0
+    physics.fps = float(opts["fps"])
+    physics.dt = 1.0 / physics.fps
     
     physics.run()
