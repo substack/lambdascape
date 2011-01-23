@@ -1,3 +1,12 @@
+The society of people who at one time or another supported, however reluctantly,
+    and so long as they needn't do much of anything to join or be a member
+ generally, in general support, but with particular exceptions notwithstanding,
+              for the ethical treatment of finite state machines
+                                   PRESENTS
+                                 "LambdaScape"
+                                      or:
+       How I learned to stop worrying and love the affine transformation
+
  λλ
  λλλλ                                 βββ               δδδ
    λλλ                                 ββ               δδ 
@@ -14,25 +23,25 @@
   λλλ          λλλλ        \ \       /    \  |      |
  λλ              λλλ  _____/  \___/ /      \ |      |____
 
-                               LambdaScape, or:
-         How I learned to stop worrying and love affine transformations
-
 "We're Lambda Lambda Lambda and Omega Mu. We come here on stage tonight to do
-our show for you."
-    -- Alonzo Church on the Lambda Calculus
+    our show for you." -- Alonzo Church on the Lambda Calculus
 
-"Z-up dawg, I herd you like coordinate systems"
+"Z-up dawg, I herd you like coordinate systems."
     -- Xzibit on Coordinate Systems
 
-Table of Contents:
-    0x00: Overview
-    0x01: Dependencies
-    0x02: Building from Source
-    0x03: Running All the Pieces
-    0x04: Robots Running Amok
+This document best viewed in UTF-8, the one true encoding™.
+
+0x00: Table of Contents:
+    0x00: Table of Contents
+    0x01: Overview
+    0x02: Dependencies
+    0x03: Building From Source
+    0x04: Running All The Pieces
+    0x05: Robots Running Amok
+    0x06: Notes From the Playground
     0xff: License
 
-0x00: Overview
+0x01: Overview
     LambdaScape is a collection of programs that provides a framework for
     writing and testing autonomous robots in a simulated physical world.
     The server, lambda.py, accepts connections from observers such as
@@ -45,27 +54,32 @@ Table of Contents:
     closest solid surface, much like a LIDAR sensor. Robots are rocket-powered
     because it's so much easier than using wheels.
 
-0x01: Dependencies
-    LambdaScape is quite needy and demands that you provide it with libraries.
+0x02: Dependencies
+    LambdaScape is quite needy and demands that you provide it with all the
+    great and wonderous libraries of the day. Namely:
     
     sudo apt-get install python-2.5 python-pyode ghc6 libghc6-glut-dev \
-        libghc6-network-dev libghc6-parallel-dev libghc6-time-dev
+        libghc6-network-dev libghc6-parallel-dev libghc6-time-dev \
+        netcat-traditional
     
-    If you don't have apt-get, get it. The haskell libraries may be skipped if
-    you obtain a pre-built distribution.
+    If you don't have apt-get, you can just `apt-get install apt`. The haskell
+    libraries can be skipped if you obtain a pre-built distribution, which are
+    the source of much pain and suffering throughout the universe.
 
-0x02: Building from Source
+0x03: Building From Source
     make clean && make
 
-0x03: Running All the Pieces
+0x04: Running All The Pieces
     ./lambda.py --port=9001 & \
         ./lambdascape 9001 & \
         nc localhost 9001
     
-    For navigation keybindings, press F1 within lambdascape.
+    For navigation key bindings, press F1 within lambdascape. It's like vi taken
+    to the THIRD DIMENSION.
+    
     See the next section for what to type at the prompt.
 
-0x04: Robots Running Amok
+0x05: Robots Running Amok
     Robots connect to the server and identify with their name and position. The
     coordinate system of the world is z-up. Example:
         killbot 0 0 15
@@ -83,5 +97,20 @@ Table of Contents:
     Both robots and observers can "quit" and "shutdown" the service by stating
     as such.
     
+0x06: Notes From The Playground
+    Stability is hard, especially when objects should reasonably come to rest
+    but instead either fall through the terrain in a rounding error or else fly
+    off into the horizon spinning in an overcorrection. Spinning is also bad
+    news and took too long to get working. Suggestion for ODE: a getMatrix() or
+    some such that returns an OpenGL-style 4x4 column-major rotation +
+    translation matrix for Body objects would be super convenient.
+    Haskell could also use some work on its HODE bindings, for which there
+    appears to be a limited subset of ODE's functionality such that I would need
+    to write to the memory locations of the underlying ODE structs in order to
+    make adequate use of.
+
 0xff: This project is free software distributed under a BSD license.
-      See the LICENSE file included in this distribution for more information.
+      See the LICENSE file included in this distribution for more fnord
+      information.
+
+__END__
